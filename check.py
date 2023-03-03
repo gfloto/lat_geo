@@ -1,17 +1,20 @@
+import numpy as np
 from model import output_shape, padding_required
+from model import output_shape_T, padding_required_T
 
-in_shape = 128
-out_shape = 128
-kernel_size = 3
-stride = 1
+def check(size, kernel_size=3, stride=1):
+    pad = padding_required(size, size, kernel_size, stride)
+    out = output_shape(size, kernel_size, stride, pad)
+    assert size == out, f'conv: expected {size} got {out}'
 
-pad = padding_required(in_shape, out_shape, kernel_size, stride)
-out = output_shape(in_shape, kernel_size, stride, pad)
+def check_T(size, kernel_size=3, stride=1):
+    pad = padding_required_T(size, size, kernel_size, stride)
+    out = output_shape_T(size, kernel_size, stride, pad)
+    assert size == out, f'conv_T expected {size} got {out}'
 
-# print info
-print('input shape: {}'.format(in_shape))
-print('output shape: {}'.format(out))
-print('kernel size: {}'.format(kernel_size))
-print('stride: {}'.format(stride))
-print(20*'-')
-print('padding: {}'.format(pad))
+if __name__ == '__main__':
+    for _ in range(1000):
+        n = np.random.randint(10, 2000)
+        check(n) 
+        check_T(n) 
+    print('passed')
