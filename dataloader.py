@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 # return dataset to main train and test framework
-def celeba_dataset(batch_size, num_workers=4, size=32):
+def celeba_dataset(batch_size, num_workers=4, size=64):
     celeba_transform =  transforms.Compose(
         [transforms.ToTensor(),
         transforms.CenterCrop((178, 178)), # square > rectangle
@@ -42,8 +42,8 @@ class CelebaDataset(Dataset):
         label = self.y[index, 1:]
 
         # try using float16
-        img = self.transform(img).type(torch.float16)
-        label = torch.from_numpy(label.astype(np.float16))
+        img = self.transform(img).type(torch.float32)
+        label = torch.from_numpy(label.astype(np.float32))
         return img, label
 
     def __len__(self):
