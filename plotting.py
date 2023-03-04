@@ -8,7 +8,7 @@ from einops import rearrange
 plt.style.use('seaborn')
 
 # visualize images
-def save_vis(x, x_out, path, n=4):
+def save_vis(x, x_out, path, n=8):
     # take first n images
     x = x[:n]; x_out = x_out[:n]
 

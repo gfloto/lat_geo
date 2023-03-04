@@ -12,10 +12,10 @@ batch norm is not included in this implimentation due to potential statistical i
 
 # vae
 class VAE(nn.Module):
-    def __init__(self, size, lat_dim):
+    def __init__(self, size, lat_dim, channels=32):
         super(VAE, self).__init__()
-        self.enc = Encoder(size, lat_dim)
-        self.dec = Decoder(size, lat_dim)
+        self.enc = Encoder(size, lat_dim, channels)
+        self.dec = Decoder(size, lat_dim, channels)
 
         # print model params
         print(f'enc params: {sum(p.numel() for p in self.enc.parameters() if p.requires_grad):,}') 
@@ -117,15 +117,23 @@ class EncLinear(nn.Module):
 
 # assume 
 class Encoder(nn.Module):
-    def __init__(self, size, lat_dim, c=32):
+    def __init__(self, size, lat_dim, c=32, b=4):
         super(Encoder, self).__init__()        
         assert math.log(size, 2) % 1 == 0, 'size must be a power of 2'
-        self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
-        self.sizes = [size // 2**i for i in range(self.layers+1)]
+        self.layers = int(math.log(size, 4/3) - 7) # shrink until bxcx8x8 then linear -> bxlat_dim
+        self.sizes = [int(size * (3/4)**i) for i in range(self.layers+1)]
+        #self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
+        #self.sizes = [size // 2**i for i in range(self.layers+1)]
+        self.sizes = [8, 12, 16, 24, 28, 36, 48, 64]
+        self.sizes.reverse()
+        self.layers = len(self.sizes)-1
+        print(self.sizes, self.layers)
 
         self.blocks = nn.ModuleList()
         for i in range(self.layers):
-            in_c = 3 if i == 0 else c
+            for j in range(b):
+                in_c = 3 if i == 0 and j == 0 else c
+                self.blocks.append(EncShrink(self.sizes[i], self.sizes[i], in_c, c))
             self.blocks.append(EncShrink(self.sizes[i], self.sizes[i+1], in_c, c))
         self.linear = EncLinear(lat_dim, self.sizes[-1], c, c // 2)
         
@@ -165,17 +173,17 @@ class DecLinear(nn.Module):
 
 # class to expand and run resnet block
 class DecExpand(nn.Module):
-    def __init__(self, in_size, out_size, in_c, out_c, e=2):
+    def __init__(self, in_size, out_size, in_c, out_c, e=4):
         super(DecExpand, self).__init__()
         stride = 1
-        kernel_size = 5
+        kernel_size = 3
         pad = padding_required_T(in_size, in_size, kernel_size, stride)  
 
         self.block = nn.Sequential(
             # 1x1 conv
             nn.Conv2d(in_c, e*in_c, kernel_size=1, stride=1, padding=0),
             nn.ReLU(inplace=True),
-            nn.Conv2d(e*in_c, e*in_c, kernel_size=kernel_size, stride=stride, padding=pad, groups=2*in_c),
+            nn.Conv2d(e*in_c, e*in_c, kernel_size=kernel_size, stride=stride, padding=pad, groups=e*in_c),
             nn.ReLU(inplace=True),
             nn.Conv2d(e*in_c, in_c, kernel_size=1, stride=1, padding=0),
             nn.ReLU(inplace=True),
@@ -197,17 +205,28 @@ class DecExpand(nn.Module):
 
 # decoder model
 class Decoder(nn.Module):
-    def __init__(self, size, lat_dim, c=32):
+    def __init__(self, size, lat_dim, c=32, b=4):
         super(Decoder, self).__init__()
         self.c = c
         assert math.log(size, 2) % 1 == 0, 'size must be a power of 2'
-        self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
-        self.sizes = [size // 2**i for i in range(self.layers+1)]
-        self.sizes.reverse()
+        # TODO: what is happening here???
+        #self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
+        #self.sizes = [size // 2**i for i in range(self.layers+1)]
+        #self.layers = int(math.log(size, 4/3) - 7) # shrink until bxcx8x8 then linear -> bxlat_dim
+        #self.sizes = [int(size * (3/4)**i) for i in range(self.layers+1)]
+        #self.sizes.reverse()
+        #print(self.sizes, self.layers)
+
+        #self.sizes = [8, 12, 16, 24, 28, 32, 36, 48, 64]
+        self.sizes = [8, 12, 16, 24, 28, 36, 48, 64]
+        self.layers = len(self.sizes) - 1
+        print(self.sizes, self.layers)
 
         self.linear = DecLinear(lat_dim, 8, c//2, c)
         self.blocks = nn.ModuleList()
         for i in range(self.layers):
+            for j in range(b):
+                self.blocks.append(DecExpand(self.sizes[i], self.sizes[i], c, c))
             self.blocks.append(DecExpand(self.sizes[i], self.sizes[i+1], c, c))
         
         stride = 1
