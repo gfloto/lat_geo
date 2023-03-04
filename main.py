@@ -23,14 +23,20 @@ if __name__ == '__main__':
     enc = Encoder(size, lat_dim).to(device)
     dec = Decoder(size, lat_dim).to(device)
 
+    # print model params
+    print(f'enc params: {sum(p.numel() for p in enc.parameters() if p.requires_grad):,}') 
+    print(f'dec params: {sum(p.numel() for p in dec.parameters() if p.requires_grad):,}')
+
     # dataloader 
     loader = celeba_dataset(batch_size, num_workers, size)
 
     for i, (x, y) in enumerate(loader):
         t0 = time.time()
-
         x = x.to(device); y = y.to(device)
+
+        print(x.shape)
         z = enc(x) 
         x_out = dec(z)
+        print(x_out.shape)
 
         print(f'time: {time.time() - t0:.5f}')
