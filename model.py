@@ -10,6 +10,28 @@ batch norm is not included in this implimentation due to potential statistical i
 '''
 # TODO: make conv h/w before linear more general
 
+# vae
+class VAE(nn.Module):
+    def __init__(self, size, lat_dim):
+        super(VAE, self).__init__()
+        self.enc = Encoder(size, lat_dim)
+        self.dec = Decoder(size, lat_dim)
+
+        # print model params
+        print(f'enc params: {sum(p.numel() for p in self.enc.parameters() if p.requires_grad):,}') 
+        print(f'dec params: {sum(p.numel() for p in self.dec.parameters() if p.requires_grad):,}')
+
+    def loss(self, x, x_out, mu, r=10):
+        recon = torch.mean(torch.sum((x - x_out)**2, dim=(1,2,3)))
+        kld = torch.mean((mu.norm(dim=1) - r)**2)
+        loss = recon + kld
+        return recon, kld, loss
+
+    def forward(self, x):
+        mu = self.enc(x)
+        z = mu + torch.randn_like(mu)
+        return mu, z, self.dec(z)
+
 # calculate output shape of convolution
 def output_shape(in_shape, kernel_size, stride, padding, dilation=1):
     return math.floor(in_shape + 2*padding - dilation*(kernel_size-1) - 1 / stride + 1)
@@ -191,7 +213,13 @@ class Decoder(nn.Module):
         stride = 1
         kernel_size = 3
         pad = padding_required(size, size, kernel_size, stride)  
-        self.final = nn.Conv2d(c, 256, kernel_size=kernel_size, stride=stride, padding=pad)
+        #self.final = nn.Conv2d(c, 256, kernel_size=kernel_size, stride=stride, padding=pad)
+
+        self.final = nn.Sequential(
+            nn.Conv2d(c, 3, kernel_size=kernel_size, stride=stride, padding=pad),
+            nn.Sigmoid(),
+        )
+        #self.final = nn.Conv2d(c, 256, kernel_size=kernel_size, stride=stride, padding=pad)
 
     def forward(self, x):
         x = self.linear(x)
