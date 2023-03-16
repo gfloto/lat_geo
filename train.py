@@ -6,8 +6,10 @@ from plotting import save_vis
 
 def train(model, loader, opt, args):
     loss_track = []
-    for i, (x, y) in enumerate(loader):
-        x = x.to(args.device); y = y.to(args.device)
+    for i in range(loader.n_batch):
+        x, y = loader.get_batch(i)
+        x = x.to(args.device)
+        y = y.to(args.device)
 
         # forward pass
         opt.zero_grad()

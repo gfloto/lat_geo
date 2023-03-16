@@ -7,6 +7,38 @@ from torch.utils.data import Dataset
 import numpy as np
 from PIL import Image
 
+# 3d shapes dataset
+class ShapesDataset(Dataset):
+    def __init__(self, x, y, args, shuffle=True):
+        self.sub_epochs = x.shape[0]
+        self.x = x.to(args.device)
+        self.y = y.to(args.device)
+        self.device = args.device
+        self.shuffle = shuffle
+
+        self.batch_size = args.batch_size
+        self.n_batch = int(np.ceil(self.x.shape[0] / self.batch_size))
+        if self.shuffle:
+            self.ind = np.random.permutation(np.arange(x.shape[0]))
+        else:
+            self.ind = np.arange(x.shape[0])
+
+    def get_batch(self, i):
+        if i != self.n_batch - 1:
+            ind = self.ind[i * self.batch_size : (i + 1) * self.batch_size]
+        else:
+            ind = self.ind[i * self.batch_size : ]
+            if self.shuffle: self.shuffle_ind()
+
+        x_ = self.x[ind]
+        y_ = self.y[ind]
+
+        return x_, y_
+
+    # call this at end of get_batch
+    def shuffle_ind(self):
+        self.ind = np.random.permutation(self.ind)
+
 # return dataset to main train and test framework
 def celeba_dataset(batch_size, num_workers=4, size=64):
     celeba_transform =  transforms.Compose(

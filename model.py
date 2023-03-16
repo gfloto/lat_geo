@@ -1,6 +1,7 @@
 import sys, math
 import torch
 import torch.nn as nn
+from einops import rearrange
 
 '''
 the encoder and decoder are roughly based on the following paper:
@@ -21,10 +22,10 @@ class VAE(nn.Module):
         print(f'enc params: {sum(p.numel() for p in self.enc.parameters() if p.requires_grad):,}') 
         print(f'dec params: {sum(p.numel() for p in self.dec.parameters() if p.requires_grad):,}')
 
-    def loss(self, x, x_out, mu, r=10):
+    def loss(self, x, x_out, mu, r=100):
         recon = torch.mean(torch.sum((x - x_out)**2, dim=(1,2,3)))
-        kld = torch.mean((mu.norm(dim=1) - r)**2)
-        loss = recon + kld
+        kld = torch.mean(torch.sum(mu**2, dim=1))
+        loss = recon
         return recon, kld, loss
 
     def forward(self, x):
@@ -46,11 +47,18 @@ def output_shape_T(in_shape, kernel_size, stride, padding, dilation=1, output_pa
 
 # calculate padding required for transposed convolution
 def padding_required_T(in_shape, out_shape, kernel_size, stride, dilation=1, output_padding=0):
-    return math.floor(((in_shape - 1)*stride + dilation*(kernel_size-1) + 1 + output_padding + 1 - out_shape) / 2)
+    return math.ceil(((in_shape - 1)*stride + dilation*(kernel_size-1) + 1 + output_padding - out_shape) / 2) 
+
+def pads_required_T(in_shape, out_shape, kernel_size, stride, dilation=1):
+    pad = padding_required_T(in_shape, out_shape, kernel_size, stride, dilation)
+    out = output_shape_T(in_shape, kernel_size, stride, pad, dilation)
+    if out != out_shape: out_pad = 1
+    else: out_pad = 0
+    return pad, out_pad
 
 # squeeze and excitation block
 class SE(nn.Module):
-    def __init__(self, in_c, reduction=16):
+    def __init__(self, in_c, reduction=2):
         super(SE, self).__init__()
 
         self.block = nn.Sequential(
@@ -112,7 +120,7 @@ class EncLinear(nn.Module):
 
     def forward(self, x):
         x = self.conv(x)
-        x = x.view(-1, self.lin_size)
+        x = rearrange(x, 'b c h w -> b (c h w)')
         return self.block(x)
 
 # assume 
@@ -120,14 +128,8 @@ class Encoder(nn.Module):
     def __init__(self, size, lat_dim, c=32, b=4):
         super(Encoder, self).__init__()        
         assert math.log(size, 2) % 1 == 0, 'size must be a power of 2'
-        self.layers = int(math.log(size, 4/3) - 7) # shrink until bxcx8x8 then linear -> bxlat_dim
-        self.sizes = [int(size * (3/4)**i) for i in range(self.layers+1)]
-        #self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
-        #self.sizes = [size // 2**i for i in range(self.layers+1)]
-        self.sizes = [8, 12, 16, 24, 28, 36, 48, 64]
-        self.sizes.reverse()
-        self.layers = len(self.sizes)-1
-        print(self.sizes, self.layers)
+        self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
+        self.sizes = [size // 2**i for i in range(self.layers+1)]
 
         self.blocks = nn.ModuleList()
         for i in range(self.layers):
@@ -190,11 +192,11 @@ class DecExpand(nn.Module):
             SE(in_c),
         )
 
-        stride = 2
+        stride = 1 if in_size == out_size else 2
         kernel_size = 3
-        pad = padding_required_T(in_size, out_size, kernel_size, stride)  
+        pad, out_pad = pads_required_T(in_size, out_size, kernel_size, stride) 
         self.expand = nn.Sequential(
-            nn.ConvTranspose2d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=pad, output_padding=1),
+            nn.ConvTranspose2d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=pad, output_padding=out_pad),
             nn.ReLU(inplace=True),
         )
 
@@ -210,17 +212,9 @@ class Decoder(nn.Module):
         self.c = c
         assert math.log(size, 2) % 1 == 0, 'size must be a power of 2'
         # TODO: what is happening here???
-        #self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
-        #self.sizes = [size // 2**i for i in range(self.layers+1)]
-        #self.layers = int(math.log(size, 4/3) - 7) # shrink until bxcx8x8 then linear -> bxlat_dim
-        #self.sizes = [int(size * (3/4)**i) for i in range(self.layers+1)]
-        #self.sizes.reverse()
-        #print(self.sizes, self.layers)
-
-        #self.sizes = [8, 12, 16, 24, 28, 32, 36, 48, 64]
-        self.sizes = [8, 12, 16, 24, 28, 36, 48, 64]
-        self.layers = len(self.sizes) - 1
-        print(self.sizes, self.layers)
+        self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
+        self.sizes = [size // 2**i for i in range(self.layers+1)]
+        self.sizes.reverse()
 
         self.linear = DecLinear(lat_dim, 8, c//2, c)
         self.blocks = nn.ModuleList()
