@@ -30,9 +30,13 @@ def save_loss(loss, path='loss'):
     np.save(os.path.join(path, 'loss.npy'), loss)
 
     # plot loss
-    fig = plt.figure(figsize=(10, 5))
+    fig = plt.figure(figsize=(6, 3))
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
+
+    # plot on log scale
+    ax1.set_yscale('log')
+    ax2.set_yscale('log')
 
     ax1.plot(loss[:, 0], label='recon', color='blue')
     ax2.plot(loss[:, 1], label='kld', color='black')

@@ -11,8 +11,8 @@ from PIL import Image
 class ShapesDataset(Dataset):
     def __init__(self, x, y, args, shuffle=True):
         self.sub_epochs = x.shape[0]
-        self.x = x.to(args.device)
-        self.y = y.to(args.device)
+        self.x = x
+        self.y = y
         self.device = args.device
         self.shuffle = shuffle
 

@@ -6,7 +6,6 @@ from einops import rearrange
 '''
 the encoder and decoder are roughly based on the following paper:
 https://arxiv.org/abs/2007.03898
-
 batch norm is not included in this implimentation due to potential statistical issues
 '''
 # TODO: make conv h/w before linear more general
@@ -21,12 +20,6 @@ class VAE(nn.Module):
         # print model params
         print(f'enc params: {sum(p.numel() for p in self.enc.parameters() if p.requires_grad):,}') 
         print(f'dec params: {sum(p.numel() for p in self.dec.parameters() if p.requires_grad):,}')
-
-    def loss(self, x, x_out, mu, r=100):
-        recon = torch.mean(torch.sum((x - x_out)**2, dim=(1,2,3)))
-        kld = torch.mean(torch.sum(mu**2, dim=1))
-        loss = recon
-        return recon, kld, loss
 
     def forward(self, x):
         mu = self.enc(x)
@@ -58,9 +51,8 @@ def pads_required_T(in_shape, out_shape, kernel_size, stride, dilation=1):
 
 # squeeze and excitation block
 class SE(nn.Module):
-    def __init__(self, in_c, reduction=2):
+    def __init__(self, in_c, reduction=1):
         super(SE, self).__init__()
-
         self.block = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(in_c, in_c // reduction, kernel_size=1, stride=1, padding=0),
@@ -94,7 +86,7 @@ class EncShrink(nn.Module):
             nn.Conv2d(out_c, out_c, kernel_size=kernel_size, stride=stride, padding=pad),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_c, out_c, kernel_size=kernel_size, stride=stride, padding=pad),
-            SE(out_c),
+            #SE(out_c),
         )
 
     def forward(self, x):
@@ -125,7 +117,7 @@ class EncLinear(nn.Module):
 
 # assume 
 class Encoder(nn.Module):
-    def __init__(self, size, lat_dim, c=32, b=4):
+    def __init__(self, size, lat_dim, c=32, b=2):
         super(Encoder, self).__init__()        
         assert math.log(size, 2) % 1 == 0, 'size must be a power of 2'
         self.layers = int(math.log(size, 2) - 3) # shrink until bxcx8x8 then linear -> bxlat_dim
@@ -189,7 +181,7 @@ class DecExpand(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(e*in_c, in_c, kernel_size=1, stride=1, padding=0),
             nn.ReLU(inplace=True),
-            SE(in_c),
+            #SE(in_c),
         )
 
         stride = 1 if in_size == out_size else 2
@@ -207,7 +199,7 @@ class DecExpand(nn.Module):
 
 # decoder model
 class Decoder(nn.Module):
-    def __init__(self, size, lat_dim, c=32, b=4):
+    def __init__(self, size, lat_dim, c=32, b=2):
         super(Decoder, self).__init__()
         self.c = c
         assert math.log(size, 2) % 1 == 0, 'size must be a power of 2'
