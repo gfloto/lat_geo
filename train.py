@@ -15,7 +15,7 @@ def train(model, loader, loss_fn, opt, args):
         # forward pass
         opt.zero_grad()
         mu, z, x_out = model(x)
-        recon, kld, loss = loss_fn(x, x_out, mu)
+        recon, kld, loss = loss_fn(x, x_out, y, mu)
         loss_track.append([recon.cpu().item(), kld.cpu().item(), loss.cpu().item()])
 
         # backward pass

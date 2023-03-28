@@ -17,7 +17,7 @@ def get_args():
     parser.add_argument('--name', type=str, default='dev')
     parser.add_argument('--epochs', type=int, default=10000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--vis_freq', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -34,10 +34,12 @@ def lat_dim_num(args):
     else:
         return len(args.discrete) + args.linear + args.circular
 
-# TODO: run this is half precision and check speed...
+# TODO: make config file for dataset
 if __name__ == '__main__':
     # get args
     args = get_args()
+    assert args.linear + args.circular > 0 or args.discrete is not None
+
     args.name = os.path.join('results', args.name)
     args.lat_dim = lat_dim_num(args)
     print(f'Latent dim: {args.lat_dim}')
@@ -49,6 +51,7 @@ if __name__ == '__main__':
     # dataloader 
     x = torch.tensor(np.load('data/3dshapes_imgs.npy'), dtype=torch.float32)
     y = torch.tensor(np.load('data/3dshapes_labels.npy'), dtype=torch.float32)
+
     x = x.permute(0, 3, 1, 2) / 255
     loader = ShapesDataset(x, y, args, shuffle=True)
 

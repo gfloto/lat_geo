@@ -9,12 +9,19 @@ from PIL import Image
 
 # 3d shapes dataset
 class ShapesDataset(Dataset):
-    def __init__(self, x, y, args, shuffle=True):
-        self.sub_epochs = x.shape[0]
-        self.x = x
-        self.y = y
+    def __init__(self, x, y, args, shuffle=True, label_ratio=0.01):
         self.device = args.device
         self.shuffle = shuffle
+
+        # swap s.t. 4th col is 0th col
+        # this is so 0 - shape, 1 - floor hue, 2 - wall hue, 3 - obj hue, 4 - scale, 5 - orientation
+        self.x = x
+        self.y = y[:, [4, 0, 1, 2, 3, 5]]
+        self.y[:, 5] = (self.y[:, 5] + 30) / 60 # scale orientation to 0 - 1
+
+        # only label a subset of the data (rest set to nan)
+        blank_ids = np.random.choice(np.arange(x.shape[0]), int(x.shape[0] * (1-label_ratio)))
+        self.y[blank_ids] *= float('nan')
 
         self.batch_size = args.batch_size
         self.n_batch = int(np.ceil(self.x.shape[0] / self.batch_size))
