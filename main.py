@@ -1,12 +1,11 @@
-import sys, os, time
+import os
+import json
 import torch
 import argparse
-import numpy as np
-from PIL import Image
 import matplotlib.pyplot as plt
 
 #from loss import Loss
-from model import VAE, Encoder, Decoder
+from models.vq import get_model 
 from loss import Loss
 from dataloader import ShapesDataset
 from train import train
@@ -14,43 +13,39 @@ from plotting import save_loss
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, default='dev')
-    parser.add_argument('--epochs', type=int, default=10000)
+
+    parser.add_argument('--exp_name', type=str, default='dev')
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--batch_size', type=int, default=64)
-    parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--vis_freq', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=1e-5)
+    parser.add_argument('--lat_dim', type=int, default=6)
+    parser.add_argument('--device', type=str, default='cuda')
 
-    parser.add_argument('--discrete', type=int, nargs='+', default=None)
-    parser.add_argument('--linear', type=int, default=0)
-    parser.add_argument('--circular', type=int, default=0)
     return parser.parse_args()
 
-# get num of latent dimensions
-def lat_dim_num(args):
-    if args.discrete is None:
-        return args.linear + args.circular
-    else:
-        return len(args.discrete) + args.linear + args.circular
+
+# save args to .json
+def save_args(args):
+    save_path = os.path.join('results', args.test_name, 'args.json')
+    with open(save_path, 'w') as f:
+        json.dump(args.__dict__, f, indent=2)
 
 # TODO: make config file for dataset
 if __name__ == '__main__':
     # get args
     args = get_args()
-    assert args.linear + args.circular > 0 or args.discrete is not None
-
-    args.name = os.path.join('results', args.name)
-    args.lat_dim = lat_dim_num(args)
-    print(f'Latent dim: {args.lat_dim}')
-    os.makedirs(args.name, exist_ok=True)
-
-    # get device
-    args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    exp_path = os.path.join('results', args.exp_name)
+    os.makedirs(exp_path, exist_ok=True)
 
     # dataloader 
-    x = torch.tensor(np.load('data/3dshapes_imgs.npy'), dtype=torch.float32)
-    y = torch.tensor(np.load('data/3dshapes_labels.npy'), dtype=torch.float32)
+    print('loading dataset')
+    x = torch.load('data/imgs.pt')
+    y = torch.load('data/labels.pt')
+    print(x.shape) 
+    print(y.shape)
+    quit()
 
     x = x.permute(0, 3, 1, 2) / 255
     loader = ShapesDataset(x, y, args, shuffle=True)
